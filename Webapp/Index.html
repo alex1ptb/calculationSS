@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top" />
+    <style>
+      <?= include('Webapp/stylesheet'); ?>
+    </style>
+    <!-- Compiled and minified CSS for Materialize-->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
+    />
+
+    <!-- Icons -->
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="questionBox-container">
+      <div class="row">
+        <div id="question-container">
+          <!-- Question will be injected here -->
+        </div>
+        <button id="prevButton" onclick="previousQuestion()">Back</button>
+        <button id="nextButton" onclick="nextQuestion()">Next</button>
+      </div>
+    </div>
+    <!-- hidden till after main questions-->
+    <div class="personalInfo-container" hidden>
+      <div class="row">
+        <form class="col s12">
+          <!-- Personal Information -->
+          <fieldset>
+            <legend>Personal Information</legend>
+            <div class="row">
+              <!-- First Name -->
+              <div class="input-field col s6">
+                <i class="material-icons prefix">account_circle</i>
+                <input id="First Name" type="text" class="validate" required/>
+                <label for="First Name">First Name</label>
+              </div>
+              <!-- Last Name -->
+              <div class="input-field col s6">
+                <i class="material-icons prefix">account_circle</i>
+                <input id="Last Name" type="text" class="validate" required/>
+                <label for="Last Name">Last Name</label>
+              </div>
+            </div>
+            <div class="row">
+              <!-- Phone Number -->
+              <div class="input-field col s4">
+                <i class="material-icons prefix">local_phone</i>
+                <input id="Phone Number" type="tel" class="validate" required/>
+                <label for="Phone Number">Phone Number</label>
+              </div>
+              <!-- Age -->
+              <div class="input-field col s4">
+                <i class="material-icons prefix">directions_walk</i>
+                <input id="Age" type="number" class="validate" required/>
+                <label for="Age">Age</label>
+              </div>
+            </div>
+            <div class="row">
+              <!-- Email -->
+              <div class="input-field col s12">
+                <i class="material-icons prefix">email</i>
+                <input id="Email" type="email" class="validate" required/>
+                <label for="Email">Email</label>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Company Information -->
+          <fieldset class="companyInformation-container">
+            <legend>Basic Company Information</legend>
+            <div class="container-responses"></div>
+          </fieldset>
+          <button
+            class="btn waves-effect waves-light right"
+            type="button"
+            name="action"
+            onclick="submitFormData()"
+          >
+            Submit
+            <i class="material-icons right">send</i>
+          </button>
+        </form>
+        <!-- Thank you section -->
+      </div>
+    </div>
+    <div class="thankYou-container" hidden>
+      <h1>Thank you for your time!</h1>
+      <p>
+        Thank you for submitting your information for review to qualify your
+        business for a customized retirement plan quote.<br />
+        Based on the information you submitted, you should expect and email
+        shortly with an estimate of your retirement plan contribution.<br />
+        One of our representatives will be in contact with you within 24 hours
+        to review your retirement plan contribution estimate.
+      </p>
+    </div>
+  </body>
+
+  <!-- Compiled and minified JavaScript for Materialize-->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <?!= include ('Webapp/javascript') ?>
+</html>

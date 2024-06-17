@@ -1,0 +1,435 @@
+<script>
+  //Global variables
+  let questions = [];
+  let currentQuestionIndex = 0;
+  let responseHistory = []; // To track the history of responses
+  let targetSheetName = ""; // Global variable to store the target sheet name
+
+  // Load the questions from the server
+  document.addEventListener("DOMContentLoaded", loadQuestions);
+  // loadQuestions();
+  // Function to load questions from the server (Google Apps Script)
+  function loadQuestions() {
+    M.AutoInit();
+    google.script.run
+      .withSuccessHandler(onQuestionsLoaded)
+      .getStructuredQuestions();
+  }
+
+  // Callback function after loading questions
+  function onQuestionsLoaded(loadedQuestions) {
+    console.log(`loadedQuestions: ${JSON.stringify(loadedQuestions, null, 2)}`);
+    questions = loadedQuestions;
+    displayQuestion(questions[currentQuestionIndex].id);
+  }
+
+  function displayQuestion(questionId) {
+    const question = questions.find((q) => q.id === questionId);
+    console.log(`Displaying question: ${questionId}, Type: ${question.type}`);
+
+    const container = document.getElementById("question-container");
+    container.innerHTML = "";
+
+    const questionText = document.createElement("p");
+    questionText.textContent = question.text;
+    container.appendChild(questionText);
+
+    let input;
+    if (question.type === "Numeric") {
+      console.log("Handling Numeric Question");
+      input = document.createElement("input");
+      input.id = "question-input";
+      input.type = "number";
+      input.classList.add("validate");
+      container.appendChild(input);
+    } else if (
+      question.type === "Yes/No" ||
+      question.type === "Yes/No/I Don't Know"
+    ) {
+      input = createSelectInput(question.type.split("/"));
+      input.id = "question-input";
+      container.appendChild(input);
+      M.FormSelect.init(input);
+    } else if (question.type.startsWith("Multiple Choice")) {
+      const choices = question.type.match(/\((.*?)\)/)[1].split(",");
+      input = createSelectInput(choices);
+      input.id = "question-input";
+      container.appendChild(input);
+      M.FormSelect.init(input);
+    }
+
+    M.FormSelect.init(document.querySelectorAll("select"));
+    currentQuestionIndex = questions.findIndex((q) => q.id === questionId);
+    M.AutoInit();
+  }
+
+  function isLastQuestion(currentQuestion) {
+    // Implement logic to determine if the current question is the last one
+    // For example, check if there are no more questions in the array
+    // or if the current question's "next" property is a certain value
+    return (
+      currentQuestion.next.length === 0 ||
+      currentQuestion.next[0].startsWith("Form")
+    );
+  }
+
+  function createSelectInput(options) {
+    const select = document.createElement("select");
+    // select.classList.add("browser-default"); // This class makes the select look like a native dropdown
+
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = "Select an option";
+    defaultOption.disabled = true;
+    defaultOption.selected = true;
+    select.appendChild(defaultOption);
+
+    options.forEach((option) => {
+      const optElement = document.createElement("option");
+      optElement.value = option.trim();
+      optElement.textContent = option.trim();
+      select.appendChild(optElement);
+    });
+
+    return select;
+  }
+
+  function nextQuestion() {
+    console.log("Next Question Triggered");
+    const input = document.getElementById("question-input");
+    const response = input ? input.value : null;
+
+    if (response === null || response === "") {
+      console.log("No response provided, stopping function.");
+      return; // Stop the function if no response is given
+    }
+
+    responseHistory.push({
+      questionId: questions[currentQuestionIndex].id,
+      response: response,
+    });
+
+    console.log(`responseHistory: ${JSON.stringify(responseHistory)}`);
+    const currentQuestion = questions[currentQuestionIndex];
+    let nextQuestionId;
+
+    if (isLastQuestion(currentQuestion)) {
+      console.log("It's the last question, handling end of questionnaire");
+      handleEndOfQuestionnaire(currentQuestion);
+      return;
+    }
+
+    if (
+      currentQuestion.type === "Yes/No" ||
+      currentQuestion.type === "Yes/No/I Don't Know"
+    ) {
+      nextQuestionId = getNextQuestionIdForYesNo(currentQuestion, response);
+    } else if (currentQuestion.type === "Numeric") {
+      nextQuestionId = getNextQuestionIdForNumeric(currentQuestion, response);
+    } else if (currentQuestion.type.startsWith("Multiple Choice")) {
+      nextQuestionId = getNextQuestionIdForMultipleChoice(
+        currentQuestion,
+        response
+      );
+    }
+
+    console.log(`nextQuestionId: ${nextQuestionId}`);
+
+    if (nextQuestionId) {
+      currentQuestionIndex = questions.findIndex(
+        (q) => q.id === nextQuestionId
+      );
+      displayQuestion(nextQuestionId);
+    } else {
+      console.error("Error: Unable to determine next question.");
+    }
+  }
+
+  function getNextQuestionIdForYesNo(currentQuestion, response) {
+    console.log(
+      `getNextQuestionIdForYesNo: ${JSON.stringify(currentQuestion)}`
+    );
+    console.log(`response: ${response}`);
+    // Assuming your 'next' field in the questions object is an array of strings
+    // and the next question ID for a 'Yes' answer is the first element,
+    // for 'No' it's the second element, etc.
+    if (response === "Yes") {
+      return currentQuestion.next[0];
+    } else if (response === "No" || response === "No, I Don't Know") {
+      handleEndOfQuestionnaire();
+      // return currentQuestion.next[1];
+    }
+    return null; // Return null if no matching condition is found
+  }
+
+  function getNextQuestionIdForNumeric(currentQuestion, response) {
+    return currentQuestion.next[0];
+  }
+  function getNextQuestionIdForMultipleChoice(currentQuestion, response) {
+    console.log(
+      `getNextQuestionIdForMultipleChoice: ${JSON.stringify(currentQuestion)}`
+    );
+    console.log(`response: ${response}`);
+
+    // Trim each choice after splitting
+    const choices = currentQuestion.type
+      .match(/\((.*?)\)/)[1]
+      .split(",")
+      .map((choice) => choice.trim());
+    console.log(`choices: ${choices}`);
+    const choiceIndex = choices.indexOf(response.trim());
+    console.log(`choiceIndex: ${choiceIndex}`);
+
+    // Check for valid index
+    if (choiceIndex === -1 || choiceIndex >= currentQuestion.next.length) {
+      console.error(`Invalid choice index: ${choiceIndex}`);
+      return null;
+    }
+
+    return currentQuestion.next[choiceIndex];
+  }
+
+  function handleEndOfQuestionnaire(currentQuestion = null) {
+    console.log(`ITS THE END!`);
+    if (currentQuestion) {
+      targetSheetName = currentQuestion.next[0];
+      console.log(`currentQuestion: ${JSON.stringify(currentQuestion)}`);
+      fetchAndDisplayCustomForm(currentQuestion.next[0]);
+    }
+    let lastResponse = null;
+    if (responseHistory.length == 1) {
+      lastResponse = responseHistory[0].response;
+    } else {
+      // Get the last question's response
+      lastResponse = responseHistory[responseHistory.length - 1].response;
+    }
+    console.log(`lastResponse: ${lastResponse}`);
+    if (
+      lastResponse == "No" ||
+      lastResponse == "I Don't Know" ||
+      lastResponse == "Generic Form Response"
+    ) {
+      document.getElementsByClassName("questionBox-container")[0].hidden = true;
+      document.getElementsByClassName(
+        "personalInfo-container"
+      )[0].hidden = false;
+      document.getElementsByClassName(
+        "companyInformation-container"
+      )[0].hidden = true;
+    } else {
+      document.getElementsByClassName("questionBox-container")[0].hidden = true;
+      document.getElementsByClassName(
+        "personalInfo-container"
+      )[0].hidden = false;
+      document.getElementsByClassName(
+        "companyInformation-container"
+      )[0].hidden = false;
+      // Handle custom form response
+      fetchAndDisplayCustomForm();
+      M.AutoInit();
+    }
+  }
+
+  function fetchAndDisplayCustomForm(formResponse) {
+    console.log(`fetchAndDisplayCustomForm: ${formResponse}`);
+    // Call Google Apps Script to get the form headers
+    google.script.run
+      .withSuccessHandler((headers) => {
+        console.log(`success on retrieving`);
+        console.log(`headers: ${JSON.stringify(headers)}`);
+        createFormFields(headers);
+        M.AutoInit();
+      })
+      .getFormHeaders(formResponse);
+  }
+
+  function createFormFields(headers) {
+    console.log(`createFormFields: ${JSON.stringify(headers)}`);
+    const container = document.getElementsByClassName("container-responses")[0];
+    container.innerHTML = ""; // Clear existing content
+
+    headers.forEach((header) => {
+      if (
+        ["Timestamp", "UID"].includes(header) ||
+        isHeaderInPersonalInfo(header)
+      ) {
+        return; // Skip certain headers
+      }
+
+      let fieldElement;
+
+      if (getFieldType(header) === "select") {
+        console.log(`Creating select element for ${header}`);
+        // Create a select element
+        fieldElement = document.createElement("select");
+        fieldElement.id = header;
+        fieldElement.classList.add("validate");
+
+        // Create and append options for select input
+        const options = header.match(/\((.*?)\)/)[1].split("/");
+        options.forEach((option) => {
+          const optElement = document.createElement("option");
+          optElement.className = header;
+          optElement.value = option.trim();
+          optElement.textContent = option.trim();
+          fieldElement.appendChild(optElement);
+        });
+
+        console.log(`fieldElement: ${JSON.stringify(fieldElement)}`);
+      } else if (getFieldType(header) === "number") {
+        fieldElement = document.createElement("input");
+        fieldElement.id = header;
+        fieldElement.type = getFieldType(header);
+        fieldElement.classList.add("validate");
+      } else {
+        // Create an input element for other types
+        fieldElement = document.createElement("input");
+        fieldElement.id = header;
+        fieldElement.type = getFieldType(header);
+        fieldElement.classList.add("validate");
+      }
+
+      let label = document.createElement("label");
+      label.htmlFor = fieldElement.id; // Ensure this matches the input's ID
+      label.textContent = header.replace(/\(.*\)/, ""); // Properly handle dynamic labels like "NEW QUESTION (Numeric)"
+      console.log(`label for ${header}: `, label);
+      console.log(`label info: ${JSON.stringify(label, null, 2)}`);
+
+      container.appendChild(label);
+      container.appendChild(fieldElement);
+    });
+
+    // Reinitialize Materialize components
+    M.AutoInit();
+  }
+
+  function getFieldType(header) {
+    if (header.includes("(Numeric)")) {
+      return "number";
+    } else if (header.includes("/")) {
+      return "select";
+    }
+    return "text";
+  }
+
+  function isHeaderInPersonalInfo(header) {
+    // Check if header is in the personal information container
+    const personalInfoFields = [
+      "First Name",
+      "Last Name",
+      "Phone Number",
+      "Age",
+      "Email",
+    ]; // Add more if needed
+    return personalInfoFields.includes(header);
+  }
+
+  function previousQuestion() {
+    console.log(`responseHistory: ${JSON.stringify(responseHistory)}`);
+    let previousResponse = null;
+    // Ensure there is a previous question to navigate back to
+
+    if (responseHistory.length == 1) {
+      previousResponse = responseHistory[0];
+    } else {
+      // Get the previous question's response
+      previousResponse = responseHistory[responseHistory.length - 2];
+    }
+    // Remove the current question's response from the history
+    responseHistory.pop(); // Remove the last response to go back to the previous question
+
+    // Update the current question index to the previous question
+    currentQuestionIndex = questions.findIndex(
+      (q) => q.id === previousResponse.questionId
+    );
+
+    // Display the previous question
+    displayQuestion(previousResponse.questionId);
+  }
+
+  function submitFormData() {
+    const personalInfo = collectPersonalInfoData();
+    const companyInfo = collectCompanyInfoData();
+    const lastResponse = responseHistory[responseHistory.length - 1].response;
+    const targetSheet = determineTargetSheet(targetSheetName);
+
+    // Combine personal and company information
+    const formData = {
+      ...personalInfo,
+      ...companyInfo,
+      targetSheet: targetSheet,
+    };
+
+    console.log(`Submitting form data: ${JSON.stringify(formData, null, 2)}`);
+
+  var form = document.querySelector('form');
+
+  if (!form.checkValidity()) {
+    // Manually display the toast if the form is invalid.
+    M.toast({html: 'Please fill out all required fields.', displayLength: 4000});
+    
+    // Highlight invalid fields
+    var invalidFields = form.querySelectorAll(':invalid');
+    invalidFields.forEach(function(field) {
+      field.classList.add('invalid');
+    });
+
+    return false; // Stop form submission
+  }
+
+
+    // Correct the class selector based on your HTML
+    document.querySelector(".questionBox-container").style.display = "none";
+    document.querySelector(".personalInfo-container").style.display = "none"; // Notice the typo correction here
+    // Show the thank you section
+    document.querySelector(".thankYou-container").hidden = false;
+    // Call Google Apps Script function to process and store the data
+    google.script.run.processFormData(formData);
+  }
+
+  function collectPersonalInfoData() {
+    const personalInfoContainer = document.querySelector(
+      ".personalInfo-container"
+    );
+    let personalInfo = {};
+
+    personalInfoContainer.querySelectorAll("input").forEach((input) => {
+      personalInfo[input.id] = input.value;
+    });
+
+    return personalInfo;
+  }
+
+  function collectCompanyInfoData() {
+    const companyInfoContainer = document.querySelector(".container-responses");
+    let companyInfo = {};
+
+    companyInfoContainer.querySelectorAll("input").forEach((input) => {
+      companyInfo[input.id] = input.value;
+    });
+    companyInfoContainer.querySelectorAll("select").forEach((select) => {
+      companyInfo[select.id] = select.value;
+    });
+
+    return companyInfo;
+  }
+
+  function determineTargetSheet(targetSheetName) {
+    console.log(`target sheet: ${targetSheetName}`);
+    // Logic to determine the target sheet based on the last response
+    // Modify this according to your specific logic and questionnaire flow
+    if (targetSheetName === "Generic Form Response") {
+      return "GenericResponses";
+    } else {
+      return targetSheetName; // Assuming the last response is the sheet name
+    }
+  }
+
+  // Attach event listeners to navigation buttons
+  document
+    .getElementById("nextButton")
+    .addEventListener("click", () => nextQuestion());
+  document
+    .getElementById("prevButton")
+    .addEventListener("click", previousQuestion);
+</script>
